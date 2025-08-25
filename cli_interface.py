@@ -2,7 +2,6 @@ from gtw_operations import GTWOperations
 import time
 import logging
 import subprocess
-import shlex
 from functools import wraps
 
 logger = logging.getLogger(__name__)
@@ -156,63 +155,64 @@ class CLIInterface:
 
     @log_command
     def auto_flash_image(self):
-        url = input("Enter full image URL (e.g., http://192.168.1.10:80/flash_cryptaes.rui): ").strip()
+        url = input("Enter full image URL (for download only, e.g., https://.../flash_cryptaes.rui): ").strip()
         if not url:
             print("❌ URL cannot be empty.")
             return
 
-        # Replace '#' with '%23' to make wget work
-        url_safe = url.replace("#", "%23")
         local_path = "/var/www/html/flash_cryptaes.rui"
-
-        print(f"Downloading image from {url_safe} ...")
+        print(f"Downloading image from {url} ...")
         try:
+            url_safe = url.replace("#", "%23")
             subprocess.run(["wget", "-O", local_path, url_safe], check=True)
             print(f"✅ Image downloaded to {local_path}")
         except subprocess.CalledProcessError:
             print("❌ Failed to download image.")
             return
 
+        # Send flash commands
         print("Sending flash commands to Gateway...")
         cmds = [
             'pcb_cli "Upgrade.Interface=lan"',
             'pcb_cli "ManagementServer.QueuedTransfers.RemoveTransfer(cmdkey1)"',
-            'pcb_cli "ManagementServer.QueuedTransfers.AddTransfer(0, 0, cmdkey1, 1, 0, \\"1 Firmware Upgrade Image\\", \\"' + url + '\\", , , , , , cli, Initial, , )"'
+            'pcb_cli "ManagementServer.QueuedTransfers.AddTransfer(0, 0, cmdkey1, 1, 0, \\"1 Firmware Upgrade Image\\", \\"http://192.168.1.10:80/flash_cryptaes.rui\\", , , , , , cli, Initial, , )"'
         ]
         for cmd in cmds:
             self.run_custom_gateway_command(cmd)
 
-        # ✅ Add wait time for flash and reboot
-        flash_wait_time = 60  # seconds, adjust if needed
-        print(f"⏳ Waiting {flash_wait_time} seconds for Gateway to flash and reboot...")
-        time.sleep(flash_wait_time)
+        # Wait fixed 5 minutes with animated progress bar
+        wait_time = 300  # 5 minutes
+        interval = 1     # update every second
+        total_steps = wait_time // interval
+        bar_length = 50
 
-        # Ping until gateway is fully back online
-        ip = "192.168.1.1"
-        timeout = 600  # max total wait time
-        interval = 5
-        elapsed = 0
-        while elapsed < timeout:
-            if subprocess.call(["ping", "-c", "1", ip], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
-                print(f"✅ Gateway {ip} is back online.")
-                break
+        print(f"⏳ Waiting {wait_time//60} minutes for Gateway to flash and reboot...")
+        for step in range(total_steps + 1):
+            percent = (step / total_steps) * 100
+            filled_length = int(bar_length * step // total_steps)
+            bar = '=' * filled_length + '>' + '.' * (bar_length - filled_length - 1)
+            remaining_time = wait_time - step * interval
+            mins, secs = divmod(remaining_time, 60)
+            print(f"\r[{bar}] {percent:6.2f}%  ETA: {mins:02d}:{secs:02d}", end='', flush=True)
             time.sleep(interval)
-            elapsed += interval
-        else:
-            print("❌ Gateway did not come back online after flash.")
-            return
+        print()  # newline after progress bar
 
+        # Check version after flash
+        version_after = self.gtw.conn.execute_commands(
+            ["cat /etc/issue.local"],
+            prompt=self.gtw.config['prompt'],
+            output_file=None
+        )
+        version_after = next(iter(version_after.values())).strip()
+        print(f"✅ Gateway finished flashing. New version detected:\n{version_after}")
 
-        version_output = self.gtw.conn.execute_commands(["cat /etc/issue.local"],
-                                                       prompt=self.gtw.config['prompt'],
-                                                       output_file=None)
-        version = next(iter(version_output.values())).strip()
-        print(f"Flashed version: {version}")
-        confirm = input("Is this the correct image? (y/n): ")
+        '''confirm = input("Is this the correct image? (y/n): ")
         if confirm.lower() == "y":
             print("✅ Flash is done.")
         else:
-            print("❌ Flash problem.")
+            print("❌ Flash problem.")'''
+
+
 
     @log_command
     def run_custom_gateway_command(self, cmd):
