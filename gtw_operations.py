@@ -19,7 +19,7 @@ class GTWOperations:
             'login_prompt': 'login:',
             'password_prompt': 'Password:'
         }
-        
+                
         try:
             if self.connection_type == 'serial':
                 logger.debug("Creating SerialInterface")
@@ -42,7 +42,7 @@ class GTWOperations:
             if not self.conn.connect():
                 logger.error("Connection failed")
                 return False
-                
+                        
             logger.debug("Connection established, attempting login")
             result = self.conn.login(
                 username=self.config['username'],
@@ -69,7 +69,7 @@ class GTWOperations:
             'ifconfig bridge'
         ]
         logger.debug(f"System info commands: {commands}")
-        
+                
         try:
             results = self.conn.execute_commands(
                 commands=commands,

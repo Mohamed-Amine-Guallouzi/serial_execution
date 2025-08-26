@@ -29,6 +29,7 @@ class CLIInterface:
             '3': {'desc': 'Stream Live Command', 'func': self.stream_live_cmd},
             '4': {'desc': 'Run Tests', 'func': self.run_tests},
             '5': {'desc': 'Auto Tests', 'func': self.run_auto_tests},
+            '6': {'desc': 'Configuration', 'func': self.configuration_menu},  # NEW OPTION
             '0': {'desc': 'Exit', 'func': self.exit},
         }
         self.test_options = {
@@ -38,6 +39,15 @@ class CLIInterface:
         self.auto_tests_options = {
             '1': {'desc': 'Ping Test', 'func': self.auto_ping_test},
             '2': {'desc': 'Flash Image', 'func': self.auto_flash_image},
+            '0': {'desc': 'Back to Main Menu', 'func': None}
+        }
+        
+        # NEW: Configuration menu options
+        self.config_options = {
+            '1': {'desc': 'WAN Surfing', 'func': self.config_wan_surfing},
+            '2': {'desc': 'WebUI', 'func': self.config_webui},
+            '3': {'desc': 'VoIP', 'func': self.config_voip},
+            '4': {'desc': 'ACS', 'func': self.config_acs},
             '0': {'desc': 'Back to Main Menu', 'func': None}
         }
 
@@ -57,6 +67,13 @@ class CLIInterface:
     def display_auto_tests_menu(self):
         print("\n=== Auto Tests Menu ===")
         for key, option in self.auto_tests_options.items():
+            print(f"{key}. {option['desc']}")
+            
+    # NEW: Display configuration menu
+    @log_command
+    def display_config_menu(self):
+        print("\n=== Configuration Menu ===")
+        for key, option in self.config_options.items():
             print(f"{key}. {option['desc']}")
 
     @log_command
@@ -129,6 +146,19 @@ class CLIInterface:
                 return
             elif choice in self.auto_tests_options and self.auto_tests_options[choice]['func']:
                 self.auto_tests_options[choice]['func']()
+            else:
+                print("Invalid option!")
+                
+    # NEW: Configuration menu handler
+    @log_command
+    def configuration_menu(self):
+        while True:
+            self.display_config_menu()
+            choice = input("\nSelect a configuration option (0 to go back): ").strip()
+            if choice == '0':
+                return
+            elif choice in self.config_options and self.config_options[choice]['func']:
+                self.config_options[choice]['func']()
             else:
                 print("Invalid option!")
 
@@ -206,14 +236,6 @@ class CLIInterface:
         version_after = next(iter(version_after.values())).strip()
         print(f"✅ Gateway finished flashing. New version detected:\n{version_after}")
 
-        '''confirm = input("Is this the correct image? (y/n): ")
-        if confirm.lower() == "y":
-            print("✅ Flash is done.")
-        else:
-            print("❌ Flash problem.")'''
-
-
-
     @log_command
     def run_custom_gateway_command(self, cmd):
         self.gtw.conn.execute_commands(commands=[cmd],
@@ -284,3 +306,160 @@ class CLIInterface:
             self.exit()
         except Exception:
             self.exit()
+            
+    # NEW: Configuration methods
+    @log_command
+    def config_wan_surfing(self):
+        """Configure WAN Surfing"""
+        print("\n=== Configuring WAN Surfing ===")
+        commands = [
+            'pcb_cli "NMC.Username=softathome"',
+            'pcb_cli "NMC.Password=softathome"'
+        ]
+        self._execute_config_commands(commands, "WAN Surfing")
+
+    @log_command
+    def config_webui(self):
+        """Configure WebUI"""
+        print("\n=== Configuring WebUI ===")
+        commands = [
+            'pcb_cli "UserManagement.User.admin.Password=1234"',
+            'pcb_cli "UserInterface.CurrentState=connected"'
+        ]
+        self._execute_config_commands(commands, "WebUI")
+
+    @log_command
+    def config_voip(self):
+        """Configure VoIP"""
+        print("\n=== Configuring VoIP ===")
+        commands = [
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.RegistrarServer=172.16.41.10"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.ProxyServer=172.16.41.10"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.UserAgentDomain=172.16.41.10"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.OutboundProxy=172.16.41.10"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.OutboundProxyPort=5060"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.Event=message-summary"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.Notifier=172.16.41.10"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.NotifierPort=5060"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.NotifierTransport=UDP"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.ExpireTime=0"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.CallingFeatures.X_ORANGE-COM_IncomingCallerIDNameEnable=1"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.CallingFeatures.MWIEnable=1"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.CallingFeatures.X_ORANGE-COM_MWIType=both"',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.SIP.URI=\\"sip:1001@172.16.41.10\\""',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.SIP.AuthUserName=\\"1001\\""',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.SIP.AuthPassword=\\"sah\\""',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.DirectoryNumber=\\"1001\\""',
+            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.Enable=\\"Enabled\\""',
+            'pcb_cli "VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Reset=1"'
+        ]
+        self._execute_config_commands(commands, "VoIP")
+        
+        # Wait 5 seconds with animation before checking status
+        print("\n⏳ Waiting for VoIP service to initialize...")
+        self._countdown_with_animation(10)
+        
+        # Check VoIP status
+        print("\n=== Checking VoIP Status ===")
+        status_cmd = 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.Status?"'
+        results = self.gtw.conn.execute_commands(
+            commands=[status_cmd],
+            prompt=self.gtw.config['prompt'],
+            output_file=None
+        )
+        
+        status = next(iter(results.values())).strip()
+        print(f"VoIP Status: {status}")
+        
+        if "Up" in status or "Registered" in status:
+            print("✅ VoIP configuration is working correctly")
+        else:
+            print("❌ VoIP configuration has issues")
+
+    @log_command
+    def _countdown_with_animation(self, seconds):
+        """Display a countdown animation with progress bar"""
+        bar_length = 30
+        interval = 0.1  # Update every 100ms
+        total_steps = int(seconds / interval)
+        
+        for step in range(total_steps + 1):
+            elapsed = step * interval
+            remaining = seconds - elapsed
+            percent = (elapsed / seconds) * 100
+            
+            # Progress bar
+            filled_length = int(bar_length * elapsed // seconds)
+            bar = '█' * filled_length + '░' * (bar_length - filled_length)
+            
+            # Countdown timer
+            mins, secs = divmod(remaining, 60)
+            timer = f"{int(mins):02d}:{int(secs):02d}"
+            
+            print(f"\r[{bar}] {percent:5.1f}%  Time remaining: {timer}", end='', flush=True)
+            time.sleep(interval)
+        
+        print()  # New line after countdown
+
+    @log_command
+    def config_acs(self):
+        """Configure ACS"""
+        print("\n=== Configuring ACS ===")
+        print("1. ACS HTTP")
+        print("2. ACS HTTPS")
+        choice = input("Select ACS type (1/2): ").strip()
+        
+        if choice == '1':
+            commands = [
+                'pcb_cli "ManagementServer.Username=admin"',
+                'pcb_cli "ManagementServer.URL=http://10.255.18.20/ACS"',
+                'pcb_cli "ManagementServer.Password=cpetest"',
+                'pcb_cli "ManagementServer.ConnectionRequestUsername=softathome"',
+                'pcb_cli "ManagementServer.ConnectionRequestPassword=softathome"',
+                'pcb_cli "ManagementServer.PeriodicInformInterval=120"',
+                'pcb_cli "ManagementServer.EnableCWMP=1"',
+                'pcb_cli "ManagementServer.AllowConnectionRequestFromAddress="'
+            ]
+        elif choice == '2':
+            commands = [
+                'pcb_cli "ManagementServer.Username=admin"',
+                'pcb_cli "ManagementServer.URL=https://pnpq3-qualif.spnp.orange.com:443/ACS"',
+                'pcb_cli "ManagementServer.Password=cpetest"',
+                'pcb_cli "ManagementServer.ConnectionRequestUsername=softathome"',
+                'pcb_cli "ManagementServer.ConnectionRequestPassword=softathome"',
+                'pcb_cli "ManagementServer.PeriodicInformInterval=120"',
+                'pcb_cli "ManagementServer.EnableCWMP=1"',
+                'pcb_cli "ManagementServer.AllowConnectionRequestFromAddress="'
+            ]
+        else:
+            print("Invalid choice!")
+            return
+            
+        self._execute_config_commands(commands, "ACS")
+
+    @log_command
+    def _execute_config_commands(self, commands, config_name):
+        """Helper method to execute configuration commands"""
+        print(f"Executing {config_name} configuration commands...")
+        
+        for cmd in commands:
+            try:
+                print(f"Executing: {cmd}")
+                results = self.gtw.conn.execute_commands(
+                    commands=[cmd],
+                    prompt=self.gtw.config['prompt'],
+                    output_file=None
+                )
+                output = next(iter(results.values()))
+                if "Error" in output or "error" in output:
+                    print(f"❌ Error in command: {cmd}")
+                    print(f"Output: {output}")
+                else:
+                    print("✅ Command executed successfully")
+            except Exception as e:
+                print(f"❌ Failed to execute command: {cmd}")
+                print(f"Error: {str(e)}")
+                
+        self._countdown_with_animation(2)
+        print(f"\n{config_name} configuration completed!")
