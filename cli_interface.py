@@ -19,6 +19,30 @@ def log_command(func):
             raise
     return wrapper
 
+def connect_wifi_real(ssid, password):
+    try:
+        print(f"🔗 Connecting to Wi-Fi SSID: {ssid} ...")
+
+        # Disconnect from any network first (optional)
+        subprocess.run(["nmcli", "device", "disconnect", "wlp0s20f3"], check=False)
+
+        # Try to connect to given SSID with password
+        result = subprocess.run(
+            ["nmcli", "device", "wifi", "connect", ssid, "password", password, "ifname", "wlp0s20f3"],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0:
+            print("✅ Connected successfully to", ssid)
+            return True
+        else:
+            print("❌ Failed to connect:", result.stderr.strip())
+            return False
+
+    except Exception as e:
+        print(f"⚠️ Error: {e}")
+        return False
 class CLIInterface:
     def __init__(self):
         logger.info("Initializing CLIInterface")
@@ -39,6 +63,7 @@ class CLIInterface:
         self.auto_tests_options = {
             '1': {'desc': 'Ping Test', 'func': self.auto_ping_test},
             '2': {'desc': 'Flash Image', 'func': self.auto_flash_image},
+            '3': {'desc': 'Connect to Wi-Fi', 'func': self.auto_connect_wifi},
             '0': {'desc': 'Back to Main Menu', 'func': None}
         }
         
@@ -48,8 +73,53 @@ class CLIInterface:
             '2': {'desc': 'WebUI', 'func': self.config_webui},
             '3': {'desc': 'VoIP', 'func': self.config_voip},
             '4': {'desc': 'ACS', 'func': self.config_acs},
+            '5': {'desc': 'WiFi Configuration', 'func': self.config_wifi},
             '0': {'desc': 'Back to Main Menu', 'func': None}
         }
+
+    @log_command
+    def config_wifi(self):
+        """Configure WiFi SSID and password"""
+        print("\n=== Configuring WiFi ===")
+        
+        # You can keep defaults or ask the user
+        ssid = input("Enter WiFi SSID [default: Lb3_2Ghz]: ").strip() or "Lb3_2Ghz"
+        password = input("Enter WiFi Password [default: 123456789]: ").strip() or "123456789"
+        
+        commands = [
+            f'pcb_cli "NeMo.Intf.wl0.SSID={ssid}"',
+            f'pcb_cli "NeMo.Intf.wl0.Security.KeyPassPhrase={password}"'
+        ]
+        
+        self._execute_config_commands(commands, "WiFi")
+        
+        print(f"\n✅ WiFi configured successfully: SSID={ssid}, Password={password}")
+    
+    @log_command
+    @log_command
+    def auto_connect_wifi(self):
+        # Get SSID
+        ssid_output = next(iter(self.gtw.conn.execute_commands(
+            ['pcb_cli "NeMo.Intf.wl0.SSID?"'],
+            prompt=self.gtw.config['prompt']
+        ).values())).strip()
+        ssid = ssid_output.split('=')[-1]  # extract only the value
+
+        # Get password
+        pwd_output = next(iter(self.gtw.conn.execute_commands(
+            ['pcb_cli "NeMo.Intf.wl0.Security.KeyPassPhrase?"'],
+            prompt=self.gtw.config['prompt']
+        ).values())).strip()
+        password = pwd_output.split('=')[-1]  # extract only the value
+
+        print(f"SSID: {ssid}, Password: {password}")
+
+        # Simulate connection
+        success = connect_wifi_real(ssid, password)
+        if success:
+            print("✅ Wi-Fi auto-test passed")
+        else:
+            print("❌ Wi-Fi auto-test failed")
 
     @log_command
     def display_menu(self):
