@@ -3,6 +3,13 @@ import time
 import logging
 import subprocess
 from functools import wraps
+import webbrowser
+import requests
+import os
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +50,30 @@ def connect_wifi_real(ssid, password):
     except Exception as e:
         print(f"⚠️ Error: {e}")
         return False
+
+def test_internet_connectivity():
+    try:
+        subprocess.run(
+            ["ping", "-c", "2", "8.8.8.8"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True
+        )
+        print("✅ Internet connectivity OK")
+        return True
+    except subprocess.CalledProcessError:
+        print("❌ No Internet connectivity")
+        return False
+
+def test_youtube_reachability():
+    try:
+        subprocess.run(["curl", "-Is", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"], check=True)
+        print("✅ YouTube reachable")
+        return True
+    except subprocess.CalledProcessError:
+        print("❌ YouTube not reachable")
+        return False
+
 class CLIInterface:
     def __init__(self):
         logger.info("Initializing CLIInterface")
@@ -53,7 +84,7 @@ class CLIInterface:
             '3': {'desc': 'Stream Live Command', 'func': self.stream_live_cmd},
             '4': {'desc': 'Run Tests', 'func': self.run_tests},
             '5': {'desc': 'Auto Tests', 'func': self.run_auto_tests},
-            '6': {'desc': 'Configuration', 'func': self.configuration_menu},  # NEW OPTION
+            '6': {'desc': 'Configuration', 'func': self.configuration_menu},
             '0': {'desc': 'Exit', 'func': self.exit},
         }
         self.test_options = {
@@ -64,6 +95,7 @@ class CLIInterface:
             '1': {'desc': 'Ping Test', 'func': self.auto_ping_test},
             '2': {'desc': 'Flash Image', 'func': self.auto_flash_image},
             '3': {'desc': 'Connect to Wi-Fi', 'func': self.auto_connect_wifi},
+            '4': {'desc': 'YouTube Stream', 'func': self.config_youtube},
             '0': {'desc': 'Back to Main Menu', 'func': None}
         }
         
@@ -96,6 +128,103 @@ class CLIInterface:
         print(f"\n✅ WiFi configured successfully: SSID={ssid}, Password={password}")
     
     @log_command
+    @log_command
+    def config_youtube(self):
+        print("🔹 Running YouTube stream test...")
+
+        # Step 1: Test internet connectivity
+        try:
+            r = requests.get("https://www.youtube.com", timeout=5)
+            if r.status_code != 200:
+                print("❌ YouTube not reachable")
+                return False
+        except Exception as e:
+            print(f"❌ Internet/YouTube not reachable: {e}")
+            return False
+
+        print("✅ Internet connectivity OK")
+        print("✅ YouTube is reachable")
+
+        # Step 2: Open YouTube with controlled browser process
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ&autoplay=1"
+        try:
+            user = os.environ.get("SUDO_USER", None)
+            
+            # Determine the best browser to use
+            browser_cmd = self._get_browser_command()
+            if not browser_cmd:
+                print("❌ No supported browser found")
+                return False
+            
+            # Open browser with URL
+            if user:
+                full_cmd = f"{browser_cmd} {url}"
+                browser_process = subprocess.Popen(
+                    ['sudo', '-u', user, 'bash', '-c', full_cmd],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            else:
+                browser_process = subprocess.Popen(
+                    browser_cmd.split() + [url],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            
+            print("🎬 Opening YouTube video in browser")
+            
+            # Wait a moment for browser to launch
+            time.sleep(3)
+            
+            # Step 3: Start 5-minute countdown with animation
+            print("⏰ Streaming for 3.3 minutes...")
+            self._countdown_with_animation(210)  # 300 seconds = 5 minutes
+            
+            # Step 4: Close the browser after stream ends
+            print("🛑 Ending YouTube stream...")
+            browser_process.terminate()
+            time.sleep(1)
+            browser_process.kill()  # Force kill if terminate didn't work
+            
+            print("✅ Stream completed and browser closed")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to open browser: {e}")
+            return False
+
+    def _get_browser_command(self):
+        """Get the best available browser command"""
+        browsers = [
+            'google-chrome --autoplay-policy=no-user-gesture-required',
+            'chromium-browser --autoplay-policy=no-user-gesture-required',
+            'google-chrome',
+            'chromium-browser',
+            'firefox'
+        ]
+        
+        for browser_cmd in browsers:
+            browser_name = browser_cmd.split()[0]
+            result = subprocess.run(['which', browser_name], capture_output=True, text=True)
+            if result.returncode == 0:
+                return browser_cmd
+        
+        return None
+
+    def _countdown_with_animation(self, seconds):
+        """Display a countdown with animation"""
+        for i in range(seconds, 0, -1):
+            mins, secs = divmod(i, 60)
+            time_format = f"{mins:02d}:{secs:02d}"
+            
+            # Animation frames
+            frames = ["🌕", "🌖", "🌗", "🌘", "🌑", "🌒", "🌓", "🌔"]
+            frame = frames[i % len(frames)]
+            
+            print(f"\r{frame} Streaming time remaining: {time_format}", end="", flush=True)
+            time.sleep(1)
+        
+        print("\r✅ Stream completed successfully! " + " " * 30)
     @log_command
     def auto_connect_wifi(self):
         # Get SSID
