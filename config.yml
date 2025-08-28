@@ -1,0 +1,170 @@
+# config.yml
+# Application Configuration
+app:
+  log_level: "INFO"
+  max_connections: 100
+
+# Connection Configuration
+connection:
+  serial:
+    baudrate: 115200
+    timeout: 3
+  telnet:
+    default_host: "192.168.1.1"
+    default_port: 23
+    timeout: 3
+
+# Login Credentials
+credentials:
+  username: "root"
+  password: "sah"
+  prompts:
+    login: "login:"
+    password: "Password:"
+    main: "/cfg/system/root #"
+
+# Network Configuration
+network:
+  test_ips:
+    - "8.8.8.8"
+    - "192.168.1.1"
+  ping_count: 4
+  ping_timeout: 2
+
+# WiFi Configuration
+wifi:
+  default_ssid: "Lb3_2Ghz"
+  default_password: "123456789"
+  interface: "wlp0s20f3"
+
+# YouTube Streaming
+youtube:
+  test_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  stream_duration: 210
+  autoplay_param: "&autoplay=1"
+
+# Browser Configuration
+browser:
+  commands:
+    - "google-chrome --autoplay-policy=no-user-gesture-required"
+    - "chromium-browser --autoplay-policy=no-user-gesture-required"
+    - "google-chrome"
+    - "chromium-browser"
+    - "firefox"
+
+# VoIP Configuration
+voip:
+  sip_server: "172.16.41.10"
+  sip_port: 5060
+  line_username: "1001"
+  line_password: "sah"
+  line_number: "1001"
+
+# ACS Configuration
+acs:
+  http:
+    url: "http://10.255.18.20/ACS"
+    username: "admin"
+    password: "cpetest"
+    connection_username: "softathome"
+    connection_password: "softathome"
+    periodic_interval: 120
+  https:
+    url: "https://pnpq3-qualif.spnp.orange.com:443/ACS"
+    username: "admin"
+    password: "cpetest"
+    connection_username: "softathome"
+    connection_password: "softathome"
+    periodic_interval: 120
+
+# File Paths
+paths:
+  local_flash_image: "/var/www/html/flash_cryptaes.rui"
+  log_directory: "logs"
+  log_file_pattern: "gateway_ops_%Y%m%d_%H%M%S.log"
+  max_log_size: 5242880
+  backup_count: 3
+
+# System Commands
+commands:
+  system_info:
+    - 'date "+%Y-%m-%d %H:%M:%S"'
+    - 'uptime'
+    - 'uname -a'
+    - 'free -m'
+    - 'df -h'
+    - 'ifconfig bridge'
+  flash:
+    - 'pcb_cli "Upgrade.Interface=lan"'
+    - 'pcb_cli "ManagementServer.QueuedTransfers.RemoveTransfer(cmdkey1)"'
+    - 'pcb_cli "ManagementServer.QueuedTransfers.AddTransfer(0, 0, cmdkey1, 1, 0, \"1 Firmware Upgrade Image\", \"http://192.168.1.10:80/flash_cryptaes.rui\", , , , , , cli, Initial, , )"'
+
+# PCB_CLI Commands
+# config.yml
+# PCB_CLI Commands (corrected syntax)
+pcb_cli:
+  wifi:
+    ssid_set: 'pcb_cli "NeMo.Intf.wl0.SSID={ssid}"'
+    ssid_get: 'pcb_cli "NeMo.Intf.wl0.SSID?"'
+    password_set: 'pcb_cli "NeMo.Intf.wl0.Security.KeyPassPhrase={password}"'
+    password_get: 'pcb_cli "NeMo.Intf.wl0.Security.KeyPassPhrase?"'
+  wan:
+    username_set: 'pcb_cli "NMC.Username={username}"'
+    password_set: 'pcb_cli "NMC.Password={password}"'
+  webui:
+    admin_password_set: 'pcb_cli "UserManagement.User.admin.Password={password}"'
+    ui_state_set: 'pcb_cli "UserInterface.CurrentState=connected"'
+  voip:
+    # SIP Server Configuration
+    registrar_server: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.RegistrarServer={server}"'
+    proxy_server: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.ProxyServer={server}"'
+    user_agent_domain: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.UserAgentDomain={server}"'
+    outbound_proxy: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.OutboundProxy={server}"'
+    outbound_proxy_port: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.OutboundProxyPort={port}"'
+    
+    # MWI Configuration
+    event_subscribe_mwi: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi"'
+    event_subscribe_mwi_event: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.Event=message-summary"'
+    event_subscribe_mwi_notifier: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.Notifier={server}"'
+    event_subscribe_mwi_notifier_port: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.NotifierPort={port}"'
+    event_subscribe_mwi_notifier_transport: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.NotifierTransport=UDP"'
+    event_subscribe_mwi_expire_time: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.ExpireTime=0"'
+    
+    # Line Features
+    line_incoming_caller_id: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.CallingFeatures.X_ORANGE-COM_IncomingCallerIDNameEnable=1"'
+    line_mwi_enable: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.CallingFeatures.MWIEnable=1"'
+    line_mwi_type: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.CallingFeatures.X_ORANGE-COM_MWIType=both"'
+    
+    # Line Configuration (CORRECTED)
+    line_sip_uri: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.SIP.URI=sip:{username}@{server}"'
+    line_auth_username: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.SIP.AuthUserName={username}"'
+    line_auth_password: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.SIP.AuthPassword={password}"'
+    line_directory_number: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.DirectoryNumber={number}"'
+    line_enable: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.Enable=Enabled"'
+    
+    # Reset
+    voice_profile_reset: 'pcb_cli "VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Reset=1"'
+    
+    # Status Query
+    line_status: 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.Status?"'
+  
+  acs:
+    username_set: 'pcb_cli "ManagementServer.Username={username}"'
+    url_set: 'pcb_cli "ManagementServer.URL={url}"'
+    password_set: 'pcb_cli "ManagementServer.Password={password}"'
+    connection_username_set: 'pcb_cli "ManagementServer.ConnectionRequestUsername={username}"'
+    connection_password_set: 'pcb_cli "ManagementServer.ConnectionRequestPassword={password}"'
+    periodic_interval_set: 'pcb_cli "ManagementServer.PeriodicInformInterval={interval}"'
+    enable_cwmp: 'pcb_cli "ManagementServer.EnableCWMP=1"'
+    allow_connection_request: 'pcb_cli "ManagementServer.AllowConnectionRequestFromAddress="'
+
+# Timeouts
+timeouts:
+  reboot_wait: 120
+  reboot_check_interval: 2
+  command_timeout: 5
+  connection_timeout: 5
+  youtube_reachability_timeout: 5
+  voip_init_wait: 10
+  flash_wait: 300
+  flash_interval: 1

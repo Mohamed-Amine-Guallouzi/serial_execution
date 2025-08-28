@@ -1,13 +1,18 @@
+# serial_interface.py
 import serial
 import serial.tools.list_ports
 import time
 from datetime import datetime
 import logging
+from config_loader import config
 
 logger = logging.getLogger(__name__)
 
 class SerialInterface:
-    def __init__(self, port=None, baudrate=115200, timeout=3):
+    def __init__(self, port=None, baudrate=None, timeout=None):
+        baudrate = baudrate or config.get_int('connection.serial.baudrate', 115200)
+        timeout = timeout or config.get_int('connection.serial.timeout', 3)
+        
         logger.info(f"Initializing SerialInterface (port: {port}, baudrate: {baudrate})")
         self.port = port
         self.baudrate = baudrate
@@ -59,8 +64,12 @@ class SerialInterface:
         logger.debug(f"Connection status: {'connected' if connected else 'disconnected'}")
         return connected
 
-    def login(self, username, password, login_prompt="login:", password_prompt="Password:", main_prompt="#"):
+    def login(self, username, password, login_prompt=None, password_prompt=None, main_prompt=None):
         """Login to serial device"""
+        login_prompt = login_prompt or config.get('credentials.prompts.login', 'login:')
+        password_prompt = password_prompt or config.get('credentials.prompts.password', 'Password:')
+        main_prompt = main_prompt or config.get('credentials.prompts.main', '#')
+        
         logger.info(f"Attempting login as {username}")
         try:
             self.send_command("\r\n")
@@ -102,8 +111,9 @@ class SerialInterface:
         full_command = f"{command}{end}".encode()
         self.serial_conn.write(full_command)
 
-    def read_until(self, patterns, timeout=5):
+    def read_until(self, patterns, timeout=None):
         """Read until one of the patterns is found"""
+        timeout = timeout or config.get_int('timeouts.command_timeout', 5)
         logger.debug(f"Reading until pattern: {patterns} (timeout: {timeout})")
         if isinstance(patterns, str):
             patterns = [patterns]

@@ -3,6 +3,7 @@ import argparse
 from cli_interface import CLIInterface
 from logger import setup_logging
 import logging
+from config_loader import config
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -12,22 +13,15 @@ def parse_args():
     parser.add_argument(
         '-l', '--log-level',
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        default='INFO',
+        default=config.get('app.log_level', 'INFO'),
         help='Set the logging level'
-    )
-    parser.add_argument(
-        '--log-file-level',
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        default='DEBUG',
-        help='Set the file logging level'
     )
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()
     setup_logging(
-        log_level=getattr(logging, args.log_level),
-        #file_level=getattr(logging, args.log_file_level)
+        log_level=getattr(logging, args.log_level)
     )
     try:
         CLIInterface().run()

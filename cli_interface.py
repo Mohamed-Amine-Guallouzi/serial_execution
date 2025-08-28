@@ -1,3 +1,4 @@
+# cli_interface.py
 from gtw_operations import GTWOperations
 import time
 import logging
@@ -10,6 +11,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from config_loader import config
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +33,11 @@ def connect_wifi_real(ssid, password):
         print(f"🔗 Connecting to Wi-Fi SSID: {ssid} ...")
 
         # Disconnect from any network first (optional)
-        subprocess.run(["nmcli", "device", "disconnect", "wlp0s20f3"], check=False)
+        subprocess.run(["nmcli", "device", "disconnect", config.get('wifi.interface', 'wlp0s20f3')], check=False)
 
         # Try to connect to given SSID with password
         result = subprocess.run(
-            ["nmcli", "device", "wifi", "connect", ssid, "password", password, "ifname", "wlp0s20f3"],
+            ["nmcli", "device", "wifi", "connect", ssid, "password", password, "ifname", config.get('wifi.interface', 'wlp0s20f3')],
             capture_output=True,
             text=True
         )
@@ -54,7 +56,7 @@ def connect_wifi_real(ssid, password):
 def test_internet_connectivity():
     try:
         subprocess.run(
-            ["ping", "-c", "2", "8.8.8.8"],
+            ["ping", "-c", str(config.get_int('network.ping_count', 2)), config.get('network.test_ips')[0]],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=True
@@ -67,7 +69,7 @@ def test_internet_connectivity():
 
 def test_youtube_reachability():
     try:
-        subprocess.run(["curl", "-Is", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"], check=True)
+        subprocess.run(["curl", "-Is", config.get('youtube.test_url')], check=True)
         print("✅ YouTube reachable")
         return True
     except subprocess.CalledProcessError:
@@ -99,7 +101,7 @@ class CLIInterface:
             '0': {'desc': 'Back to Main Menu', 'func': None}
         }
         
-        # NEW: Configuration menu options
+        # Configuration menu options
         self.config_options = {
             '1': {'desc': 'WAN Surfing', 'func': self.config_wan_surfing},
             '2': {'desc': 'WebUI', 'func': self.config_webui},
@@ -114,13 +116,13 @@ class CLIInterface:
         """Configure WiFi SSID and password"""
         print("\n=== Configuring WiFi ===")
         
-        # You can keep defaults or ask the user
-        ssid = input("Enter WiFi SSID [default: Lb3_2Ghz]: ").strip() or "Lb3_2Ghz"
-        password = input("Enter WiFi Password [default: 123456789]: ").strip() or "123456789"
+        # Get values from config or ask user
+        ssid = input(f"Enter WiFi SSID [default: {config.get('wifi.default_ssid', 'Lb3_2Ghz')}]: ").strip() or config.get('wifi.default_ssid', 'Lb3_2Ghz')
+        password = input(f"Enter WiFi Password [default: {config.get('wifi.default_password', '123456789')}]: ").strip() or config.get('wifi.default_password', '123456789')
         
         commands = [
-            f'pcb_cli "NeMo.Intf.wl0.SSID={ssid}"',
-            f'pcb_cli "NeMo.Intf.wl0.Security.KeyPassPhrase={password}"'
+            config.get('pcb_cli.wifi.ssid_set').format(ssid=ssid),
+            config.get('pcb_cli.wifi.password_set').format(password=password)
         ]
         
         self._execute_config_commands(commands, "WiFi")
@@ -128,13 +130,12 @@ class CLIInterface:
         print(f"\n✅ WiFi configured successfully: SSID={ssid}, Password={password}")
     
     @log_command
-    @log_command
     def config_youtube(self):
         print("🔹 Running YouTube stream test...")
 
         # Step 1: Test internet connectivity
         try:
-            r = requests.get("https://www.youtube.com", timeout=5)
+            r = requests.get("https://www.youtube.com", timeout=config.get_int('timeouts.youtube_reachability_timeout', 5))
             if r.status_code != 200:
                 print("❌ YouTube not reachable")
                 return False
@@ -146,7 +147,7 @@ class CLIInterface:
         print("✅ YouTube is reachable")
 
         # Step 2: Open YouTube with controlled browser process
-        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ&autoplay=1"
+        url = config.get('youtube.test_url') + config.get('youtube.autoplay_param')
         try:
             user = os.environ.get("SUDO_USER", None)
             
@@ -176,9 +177,9 @@ class CLIInterface:
             # Wait a moment for browser to launch
             time.sleep(3)
             
-            # Step 3: Start 5-minute countdown with animation
-            print("⏰ Streaming for 3.3 minutes...")
-            self._countdown_with_animation(210)  # 300 seconds = 5 minutes
+            # Step 3: Start countdown
+            print(f"⏰ Streaming for {config.get_int('youtube.stream_duration', 210) // 60} minutes...")
+            self._countdown_with_animation(config.get_int('youtube.stream_duration', 210))
             
             # Step 4: Close the browser after stream ends
             print("🛑 Ending YouTube stream...")
@@ -195,13 +196,13 @@ class CLIInterface:
 
     def _get_browser_command(self):
         """Get the best available browser command"""
-        browsers = [
+        browsers = config.get_list('browser.commands', [
             'google-chrome --autoplay-policy=no-user-gesture-required',
             'chromium-browser --autoplay-policy=no-user-gesture-required',
             'google-chrome',
             'chromium-browser',
             'firefox'
-        ]
+        ])
         
         for browser_cmd in browsers:
             browser_name = browser_cmd.split()[0]
@@ -225,18 +226,19 @@ class CLIInterface:
             time.sleep(1)
         
         print("\r✅ Stream completed successfully! " + " " * 30)
+
     @log_command
     def auto_connect_wifi(self):
         # Get SSID
         ssid_output = next(iter(self.gtw.conn.execute_commands(
-            ['pcb_cli "NeMo.Intf.wl0.SSID?"'],
+            [config.get('pcb_cli.wifi.ssid_get')],
             prompt=self.gtw.config['prompt']
         ).values())).strip()
         ssid = ssid_output.split('=')[-1]  # extract only the value
 
         # Get password
         pwd_output = next(iter(self.gtw.conn.execute_commands(
-            ['pcb_cli "NeMo.Intf.wl0.Security.KeyPassPhrase?"'],
+            [config.get('pcb_cli.wifi.password_get')],
             prompt=self.gtw.config['prompt']
         ).values())).strip()
         password = pwd_output.split('=')[-1]  # extract only the value
@@ -268,7 +270,6 @@ class CLIInterface:
         for key, option in self.auto_tests_options.items():
             print(f"{key}. {option['desc']}")
             
-    # NEW: Display configuration menu
     @log_command
     def display_config_menu(self):
         print("\n=== Configuration Menu ===")
@@ -286,8 +287,8 @@ class CLIInterface:
                 port = input("Enter serial port (leave empty for auto-detection): ") or None
                 return GTWOperations(connection_type='serial', port=port)
             elif choice == '2':
-                host = input("Enter telnet host [192.168.1.1]: ").strip() or '192.168.1.1'
-                port = input("Enter telnet port [23]: ").strip() or '23'
+                host = input(f"Enter telnet host [{config.get('connection.telnet.default_host', '192.168.1.1')}]: ").strip() or config.get('connection.telnet.default_host', '192.168.1.1')
+                port = input(f"Enter telnet port [{config.get('connection.telnet.default_port', 23)}]: ").strip() or str(config.get('connection.telnet.default_port', 23))
                 return GTWOperations(connection_type='telnet', host=host, port=int(port))
             print("Invalid choice! Please enter 1 or 2")
 
@@ -348,7 +349,6 @@ class CLIInterface:
             else:
                 print("Invalid option!")
                 
-    # NEW: Configuration menu handler
     @log_command
     def configuration_menu(self):
         while True:
@@ -365,7 +365,7 @@ class CLIInterface:
     def auto_ping_test(self):
         print("\n=== Auto Ping Test ===")
         try:
-            results = self.gtw.conn.execute_commands(["ping -c 4 8.8.8.8"],
+            results = self.gtw.conn.execute_commands([f"ping -c {config.get_int('network.ping_count', 4)} {config.get('network.test_ips')[0]}"],
                                                      prompt=self.gtw.config['prompt'],
                                                      output_file=None)
             output = next(iter(results.values()))
@@ -374,7 +374,7 @@ class CLIInterface:
             else:
                 print("❌ Internet surfing FAILED")
 
-            if subprocess.call(["ping", "-c", "4", "192.168.1.1"]) == 0:
+            if subprocess.call(["ping", "-c", str(config.get_int('network.ping_count', 4)), config.get('network.test_ips')[1]]) == 0:
                 print("✅ PC can reach Gateway")
             else:
                 print("❌ PC cannot reach Gateway")
@@ -389,7 +389,7 @@ class CLIInterface:
             print("❌ URL cannot be empty.")
             return
 
-        local_path = "/var/www/html/flash_cryptaes.rui"
+        local_path = config.get('paths.local_flash_image', '/var/www/html/flash_cryptaes.rui')
         print(f"Downloading image from {url} ...")
         try:
             url_safe = url.replace("#", "%23")
@@ -401,17 +401,18 @@ class CLIInterface:
 
         # Send flash commands
         print("Sending flash commands to Gateway...")
-        cmds = [
+        flash_commands = config.get_list('commands.flash', [
             'pcb_cli "Upgrade.Interface=lan"',
             'pcb_cli "ManagementServer.QueuedTransfers.RemoveTransfer(cmdkey1)"',
             'pcb_cli "ManagementServer.QueuedTransfers.AddTransfer(0, 0, cmdkey1, 1, 0, \\"1 Firmware Upgrade Image\\", \\"http://192.168.1.10:80/flash_cryptaes.rui\\", , , , , , cli, Initial, , )"'
-        ]
-        for cmd in cmds:
+        ])
+        
+        for cmd in flash_commands:
             self.run_custom_gateway_command(cmd)
 
-        # Wait fixed 5 minutes with animated progress bar
-        wait_time = 300  # 5 minutes
-        interval = 1     # update every second
+        # Wait fixed time with animated progress bar
+        wait_time = config.get_int('timeouts.flash_wait', 300)  # 5 minutes
+        interval = config.get_int('timeouts.flash_interval', 1)  # update every second
         total_steps = wait_time // interval
         bar_length = 50
 
@@ -462,7 +463,10 @@ class CLIInterface:
         else:
             print("❌ Failed to reconnect after reboot.")
 
-    def _wait_for_ping(self, host, timeout=120, interval=2):
+    def _wait_for_ping(self, host, timeout=None, interval=None):
+        timeout = timeout or config.get_int('timeouts.reboot_wait', 120)
+        interval = interval or config.get_int('timeouts.reboot_check_interval', 2)
+        
         start_time = time.time()
         while time.time() - start_time < timeout:
             if subprocess.call(["ping", "-c", "1", host], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
@@ -506,14 +510,14 @@ class CLIInterface:
         except Exception:
             self.exit()
             
-    # NEW: Configuration methods
+    # Configuration methods
     @log_command
     def config_wan_surfing(self):
         """Configure WAN Surfing"""
         print("\n=== Configuring WAN Surfing ===")
         commands = [
-            'pcb_cli "NMC.Username=softathome"',
-            'pcb_cli "NMC.Password=softathome"'
+            config.get('pcb_cli.wan.username_set').format(username='softathome'),
+            config.get('pcb_cli.wan.password_set').format(password='softathome')
         ]
         self._execute_config_commands(commands, "WAN Surfing")
 
@@ -522,8 +526,8 @@ class CLIInterface:
         """Configure WebUI"""
         print("\n=== Configuring WebUI ===")
         commands = [
-            'pcb_cli "UserManagement.User.admin.Password=1234"',
-            'pcb_cli "UserInterface.CurrentState=connected"'
+            config.get('pcb_cli.webui.admin_password_set').format(password='1234'),
+            config.get('pcb_cli.webui.ui_state_set')
         ]
         self._execute_config_commands(commands, "WebUI")
 
@@ -531,37 +535,44 @@ class CLIInterface:
     def config_voip(self):
         """Configure VoIP"""
         print("\n=== Configuring VoIP ===")
+        server = config.get('voip.sip_server', '172.16.41.10')
+        port = config.get_int('voip.sip_port', 5060)
+        username = config.get('voip.line_username', '1001')
+        password = config.get('voip.line_password', 'sah')
+        number = config.get('voip.line_number', '1001')
+        
         commands = [
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.RegistrarServer=172.16.41.10"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.ProxyServer=172.16.41.10"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.UserAgentDomain=172.16.41.10"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.OutboundProxy=172.16.41.10"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.OutboundProxyPort=5060"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.Event=message-summary"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.Notifier=172.16.41.10"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.NotifierPort=5060"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.NotifierTransport=UDP"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.SIP.EventSubscribe.mwi.ExpireTime=0"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.CallingFeatures.X_ORANGE-COM_IncomingCallerIDNameEnable=1"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.CallingFeatures.MWIEnable=1"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.CallingFeatures.X_ORANGE-COM_MWIType=both"',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.SIP.URI=\\"sip:1001@172.16.41.10\\""',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.SIP.AuthUserName=\\"1001\\""',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.SIP.AuthPassword=\\"sah\\""',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.DirectoryNumber=\\"1001\\""',
-            'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.Enable=\\"Enabled\\""',
-            'pcb_cli "VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Reset=1"'
+            config.get('pcb_cli.voip.registrar_server').format(server=server),
+            config.get('pcb_cli.voip.proxy_server').format(server=server),
+            config.get('pcb_cli.voip.user_agent_domain').format(server=server),
+            config.get('pcb_cli.voip.outbound_proxy').format(server=server),
+            config.get('pcb_cli.voip.outbound_proxy_port').format(port=port),
+            config.get('pcb_cli.voip.event_subscribe_mwi'),
+            config.get('pcb_cli.voip.event_subscribe_mwi_event'),
+            config.get('pcb_cli.voip.event_subscribe_mwi_notifier').format(server=server),
+            config.get('pcb_cli.voip.event_subscribe_mwi_notifier_port').format(port=port),
+            config.get('pcb_cli.voip.event_subscribe_mwi_notifier_transport'),
+            config.get('pcb_cli.voip.event_subscribe_mwi_expire_time'),
+            config.get('pcb_cli.voip.line_incoming_caller_id'),
+            config.get('pcb_cli.voip.line_mwi_enable'),
+            config.get('pcb_cli.voip.line_mwi_type'),
+            config.get('pcb_cli.voip.line_sip_uri').format(username=username, server=server),
+            config.get('pcb_cli.voip.line_auth_username').format(username=username),
+            config.get('pcb_cli.voip.line_auth_password').format(password=password),
+            config.get('pcb_cli.voip.line_directory_number').format(number=number),
+            config.get('pcb_cli.voip.line_enable'),
+            config.get('pcb_cli.voip.voice_profile_reset')
         ]
         self._execute_config_commands(commands, "VoIP")
         
-        # Wait 5 seconds with animation before checking status
-        print("\n⏳ Waiting for VoIP service to initialize...")
-        self._countdown_with_animation(10)
+        # Wait before checking status
+        wait_time = config.get_int('timeouts.voip_init_wait', 10)
+        print(f"\n⏳ Waiting {wait_time} seconds for VoIP service to initialize...")
+        self._countdown_with_animation(wait_time)
         
         # Check VoIP status
         print("\n=== Checking VoIP Status ===")
-        status_cmd = 'pcb_cli "Device.Services.VoiceService.VoiceApplication.VoiceProfile.SIP-Trunk.Line.LINE1.Status?"'
+        status_cmd = config.get('pcb_cli.voip.line_status')
         results = self.gtw.conn.execute_commands(
             commands=[status_cmd],
             prompt=self.gtw.config['prompt'],
@@ -576,7 +587,6 @@ class CLIInterface:
         else:
             print("❌ VoIP configuration has issues")
 
-    @log_command
     def _countdown_with_animation(self, seconds):
         """Display a countdown animation with progress bar"""
         bar_length = 30
@@ -610,26 +620,28 @@ class CLIInterface:
         choice = input("Select ACS type (1/2): ").strip()
         
         if choice == '1':
+            acs_config = config.get('acs.http')
             commands = [
-                'pcb_cli "ManagementServer.Username=admin"',
-                'pcb_cli "ManagementServer.URL=http://10.255.18.20/ACS"',
-                'pcb_cli "ManagementServer.Password=cpetest"',
-                'pcb_cli "ManagementServer.ConnectionRequestUsername=softathome"',
-                'pcb_cli "ManagementServer.ConnectionRequestPassword=softathome"',
-                'pcb_cli "ManagementServer.PeriodicInformInterval=120"',
-                'pcb_cli "ManagementServer.EnableCWMP=1"',
-                'pcb_cli "ManagementServer.AllowConnectionRequestFromAddress="'
+                config.get('pcb_cli.acs.username_set').format(username=acs_config['username']),
+                config.get('pcb_cli.acs.url_set').format(url=acs_config['url']),
+                config.get('pcb_cli.acs.password_set').format(password=acs_config['password']),
+                config.get('pcb_cli.acs.connection_username_set').format(username=acs_config['connection_username']),
+                config.get('pcb_cli.acs.connection_password_set').format(password=acs_config['connection_password']),
+                config.get('pcb_cli.acs.periodic_interval_set').format(interval=acs_config['periodic_interval']),
+                config.get('pcb_cli.acs.enable_cwmp'),
+                config.get('pcb_cli.acs.allow_connection_request')
             ]
         elif choice == '2':
+            acs_config = config.get('acs.https')
             commands = [
-                'pcb_cli "ManagementServer.Username=admin"',
-                'pcb_cli "ManagementServer.URL=https://pnpq3-qualif.spnp.orange.com:443/ACS"',
-                'pcb_cli "ManagementServer.Password=cpetest"',
-                'pcb_cli "ManagementServer.ConnectionRequestUsername=softathome"',
-                'pcb_cli "ManagementServer.ConnectionRequestPassword=softathome"',
-                'pcb_cli "ManagementServer.PeriodicInformInterval=120"',
-                'pcb_cli "ManagementServer.EnableCWMP=1"',
-                'pcb_cli "ManagementServer.AllowConnectionRequestFromAddress="'
+                config.get('pcb_cli.acs.username_set').format(username=acs_config['username']),
+                config.get('pcb_cli.acs.url_set').format(url=acs_config['url']),
+                config.get('pcb_cli.acs.password_set').format(password=acs_config['password']),
+                config.get('pcb_cli.acs.connection_username_set').format(username=acs_config['connection_username']),
+                config.get('pcb_cli.acs.connection_password_set').format(password=acs_config['connection_password']),
+                config.get('pcb_cli.acs.periodic_interval_set').format(interval=acs_config['periodic_interval']),
+                config.get('pcb_cli.acs.enable_cwmp'),
+                config.get('pcb_cli.acs.allow_connection_request')
             ]
         else:
             print("Invalid choice!")

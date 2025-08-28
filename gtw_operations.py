@@ -1,23 +1,25 @@
+# gtw_operations.py
 from serial_interface import SerialInterface
 from telnet_interface import TelnetInterface
 from datetime import datetime
 import time
 import logging
+from config_loader import config
 
 logger = logging.getLogger(__name__)
 
 class GTWOperations:
-    def __init__(self, connection_type='serial', port=None, host='192.168.1.1', **kwargs):
+    def __init__(self, connection_type='serial', port=None, host=None, **kwargs):
         logger.info(f"Initializing GTWOperations with {connection_type} connection")
         logger.debug(f"Connection params - port: {port}, host: {host}, kwargs: {kwargs}")
         self.connection_type = connection_type.lower()
         self.conn = None
         self.config = {
-            'username': 'root',
-            'password': 'sah',
-            'prompt': '/cfg/system/root #',
-            'login_prompt': 'login:',
-            'password_prompt': 'Password:'
+            'username': config.get('credentials.username', 'root'),
+            'password': config.get('credentials.password', 'sah'),
+            'prompt': config.get('credentials.prompts.main', '/cfg/system/root #'),
+            'login_prompt': config.get('credentials.prompts.login', 'login:'),
+            'password_prompt': config.get('credentials.prompts.password', 'Password:')
         }
                 
         try:
@@ -26,6 +28,7 @@ class GTWOperations:
                 self.conn = SerialInterface(port=port)
             elif self.connection_type == 'telnet':
                 logger.debug("Creating TelnetInterface")
+                host = host or config.get('connection.telnet.default_host', '192.168.1.1')
                 self.conn = TelnetInterface(host=host)
             else:
                 error_msg = f"Invalid connection type: {self.connection_type}"
@@ -60,14 +63,14 @@ class GTWOperations:
     def get_system_info(self, output_file=None):
         """Get system information"""
         logger.info("Getting system information")
-        commands = [
+        commands = config.get_list('commands.system_info', [
             'date "+%Y-%m-%d %H:%M:%S"',
             'uptime',
             'uname -a',
             'free -m',
             'df -h',
             'ifconfig bridge'
-        ]
+        ])
         logger.debug(f"System info commands: {commands}")
                 
         try:

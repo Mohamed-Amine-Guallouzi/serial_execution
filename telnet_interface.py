@@ -1,13 +1,19 @@
+# telnet_interface.py
 import telnetlib
 import time
 from datetime import datetime
 import logging
 import socket
+from config_loader import config
 
 logger = logging.getLogger(__name__)
 
 class TelnetInterface:
-    def __init__(self, host='192.168.1.1', port=23, timeout=3):
+    def __init__(self, host=None, port=None, timeout=None):
+        host = host or config.get('connection.telnet.default_host', '192.168.1.1')
+        port = port or config.get_int('connection.telnet.default_port', 23)
+        timeout = timeout or config.get_int('connection.telnet.timeout', 3)
+        
         logger.info(f"Initializing TelnetInterface with {host}:{port}")
         self.host = host
         self.port = port
@@ -35,8 +41,12 @@ class TelnetInterface:
         logger.debug(f"Connection status: {'connected' if connected else 'disconnected'}")
         return connected
 
-    def login(self, username, password, login_prompt="login:", password_prompt="Password:", main_prompt="#"):
+    def login(self, username, password, login_prompt=None, password_prompt=None, main_prompt=None):
         """Login to telnet device"""
+        login_prompt = login_prompt or config.get('credentials.prompts.login', 'login:')
+        password_prompt = password_prompt or config.get('credentials.prompts.password', 'Password:')
+        main_prompt = main_prompt or config.get('credentials.prompts.main', '#')
+        
         logger.info(f"Attempting login as {username}")
         try:
             login_result = self.read_until(login_prompt)
@@ -84,8 +94,9 @@ class TelnetInterface:
         self.tn.write(full_command)
         time.sleep(wait)
 
-    def read_until(self, patterns, timeout=5, max_retries=3):
+    def read_until(self, patterns, timeout=None, max_retries=3):
         """Read until pattern is found"""
+        timeout = timeout or config.get_int('timeouts.command_timeout', 5)
         logger.debug(f"Reading until pattern: {patterns} (timeout: {timeout}, retries: {max_retries})")
         if isinstance(patterns, str):
             patterns = [patterns]
